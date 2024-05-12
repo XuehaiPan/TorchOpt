@@ -184,7 +184,7 @@ class OmniglotNShot:
                 self.x.append(np.array(imgs))
 
             # as different class may have different number of imgs
-            self.x = np.array(self.x).astype(np.float)  # [[20 imgs],..., 1623 classes in total]
+            self.x = np.array(self.x).astype(np.float_)  # [[20 imgs],..., 1623 classes in total]
             # each character contains 20 imgs
             print('data shape:', self.x.shape)  # [1623, 20, 84, 84, 1]
             temp = []  # Free memory
@@ -293,7 +293,7 @@ class OmniglotNShot:
                 self.resize,
                 self.resize,
             )  # [b, setsz, 1, 84, 84]
-            y_spts = np.array(y_spts, dtype=np.int).reshape(
+            y_spts = np.array(y_spts, dtype=np.int_).reshape(
                 self.batchsz,
                 setsz,
             )  # [b, qrysz, 1, 84, 84]
@@ -304,7 +304,7 @@ class OmniglotNShot:
                 self.resize,
                 self.resize,
             )
-            y_qrys = np.array(y_qrys, dtype=np.int).reshape(self.batchsz, querysz)
+            y_qrys = np.array(y_qrys, dtype=np.int_).reshape(self.batchsz, querysz)
 
             x_spts, y_spts, x_qrys, y_qrys = (
                 torch.from_numpy(z).to(self.device) for z in [x_spts, y_spts, x_qrys, y_qrys]

@@ -60,7 +60,7 @@ Note that we can pass the generator returned by the method ``named_parameters`` 
 
     from IPython.display import display
     import torch
-    from torch import nn
+    import torch.nn as nn
     import torchopt
 
 
@@ -94,7 +94,7 @@ Our visualization tool allows users to take as input the extracted network state
 
     from IPython.display import display
     import torch
-    from torch import nn
+    import torch.nn as nn
     import torchopt
 
     class MetaNet(nn.Module):

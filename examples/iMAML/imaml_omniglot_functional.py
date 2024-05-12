@@ -24,7 +24,6 @@ for few-shot Omniglot classification.
 import argparse
 import time
 
-import functorch
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -105,26 +104,36 @@ def main():
     # We will use Adam to (meta-)optimize the initial parameters
     # to be adapted.
     net.train()
-    fnet, meta_params = model = functorch.make_functional(net)
+    meta_params = dict(net.named_parameters())
+    net.to('meta')
     meta_opt = torchopt.adam(lr=1e-3)
     meta_opt_state = meta_opt.init(meta_params)
 
     log = []
-    test(db, model, epoch=-1, log=log, args=args)
+    test(db, (net, meta_params), epoch=-1, log=log, args=args)
     for epoch in range(10):
-        meta_opt, meta_opt_state = train(db, model, (meta_opt, meta_opt_state), epoch, log, args)
-        test(db, model, epoch, log, args)
+        meta_opt, meta_opt_state = train(
+            db,
+            (net, meta_params),
+            (meta_opt, meta_opt_state),
+            epoch=epoch,
+            log=log,
+            args=args,
+        )
+        test(
+            db,
+            (net, meta_params),
+            epoch=epoch,
+            log=log,
+            args=args,
+        )
         plot(log)
 
 
 def train(db, model, meta_opt_and_state, epoch, log, args):
     n_train_iter = db.x_train.shape[0] // db.batchsz
-    fnet, meta_params = model
+    net, meta_params = model
     meta_opt, meta_opt_state = meta_opt_and_state
-    # Given this module we've created, rip out the parameters and buffers
-    # and return a functional version of the module. `fnet` is stateless
-    # and can be called with `fnet(params, buffers, args, kwargs)`
-    # fnet, params, buffers = functorch.make_functional_with_buffers(net)
 
     for batch_idx in range(n_train_iter):
         start_time = time.time()
@@ -148,23 +157,30 @@ def train(db, model, meta_opt_and_state, epoch, log, args):
                 lambda t: t.clone().detach_().requires_grad_(requires_grad=t.requires_grad),
                 meta_params,
             )
-            optimal_params = train_imaml_inner_solver(
-                init_params,
-                meta_params,
-                (x_spt[i], y_spt[i]),
-                (fnet, n_inner_iter, reg_param),
+            optimal_params = dict(
+                zip(
+                    init_params,
+                    train_imaml_inner_solver(
+                        tuple(init_params.values()),
+                        tuple(meta_params.values()),
+                        (x_spt[i], y_spt[i]),
+                        (net, n_inner_iter, reg_param),
+                    ),
+                )
             )
             # The final set of adapted parameters will induce some
             # final loss and accuracy on the query dataset.
             # These will be used to update the model's meta-parameters.
-            qry_logits = fnet(optimal_params, x_qry[i])
+            qry_logits = torch.func.functional_call(net, optimal_params, x_qry[i])
             qry_loss = F.cross_entropy(qry_logits, y_qry[i])
             qry_acc = (qry_logits.argmax(dim=1) == y_qry[i]).float().mean()
             qry_losses.append(qry_loss)
             qry_accs.append(qry_acc.item())
 
         qry_losses = torch.mean(torch.stack(qry_losses))
-        meta_grads = torch.autograd.grad(qry_losses, meta_params)
+        meta_grads = dict(
+            zip(meta_params, torch.autograd.grad(qry_losses, tuple(meta_params.values())))
+        )
         meta_updates, meta_opt_state = meta_opt.update(meta_grads, meta_opt_state)
         meta_params = torchopt.apply_updates(meta_params, meta_updates)
         qry_losses = qry_losses.item()
@@ -194,7 +210,7 @@ def test(db, model, epoch, log, args):
     # Most research papers using MAML for this task do an extra
     # stage of fine-tuning here that should be added if you are
     # adapting this code for research.
-    fnet, meta_params = model
+    net, meta_params = model
     n_test_iter = db.x_test.shape[0] // db.batchsz
 
     n_inner_iter = args.inner_steps
@@ -216,15 +232,20 @@ def test(db, model, epoch, log, args):
                 lambda t: t.clone().detach_().requires_grad_(requires_grad=t.requires_grad),
                 meta_params,
             )
-            optimal_params = test_imaml_inner_solver(
-                init_params,
-                meta_params,
-                (x_spt[i], y_spt[i]),
-                (fnet, n_inner_iter, reg_param),
+            optimal_params = dict(
+                zip(
+                    init_params,
+                    test_imaml_inner_solver(
+                        tuple(init_params.values()),
+                        tuple(meta_params.values()),
+                        (x_spt[i], y_spt[i]),
+                        (net, n_inner_iter, reg_param),
+                    ),
+                )
             )
 
             # The query loss and acc induced by these parameters.
-            qry_logits = fnet(optimal_params, x_qry[i])
+            qry_logits = torch.func.functional_call(net, optimal_params, x_qry[i])
             qry_loss = F.cross_entropy(qry_logits, y_qry[i])
             qry_acc = (qry_logits.argmax(dim=1) == y_qry[i]).float().mean()
             qry_losses.append(qry_loss.item())
@@ -247,8 +268,9 @@ def test(db, model, epoch, log, args):
 
 def imaml_objective(params, meta_params, data, aux):
     x_spt, y_spt = data
-    fnet, n_inner_iter, reg_param = aux
-    y_pred = fnet(params, x_spt)
+    net, n_inner_iter, reg_param = aux
+    param_names = list(dict(net.named_parameters()))
+    y_pred = torch.func.functional_call(net, dict(zip(param_names, params)), x_spt)
     regularization_loss = 0
     for p1, p2 in zip(params, meta_params):
         regularization_loss += 0.5 * reg_param * torch.sum(torch.square(p1 - p2))
@@ -257,21 +279,22 @@ def imaml_objective(params, meta_params, data, aux):
 
 
 @torchopt.diff.implicit.custom_root(
-    functorch.grad(imaml_objective, argnums=0),
+    torch.func.grad(imaml_objective, argnums=0),
     argnums=1,
     has_aux=False,
     solve=torchopt.linear_solve.solve_normal_cg(maxiter=5, atol=0),
 )
 def train_imaml_inner_solver(params, meta_params, data, aux):
     x_spt, y_spt = data
-    fnet, n_inner_iter, reg_param = aux
+    net, n_inner_iter, reg_param = aux
+    param_names = list(dict(net.named_parameters()))
     # Initial functional optimizer based on TorchOpt
     inner_opt = torchopt.sgd(lr=1e-1)
     inner_opt_state = inner_opt.init(params)
     with torch.enable_grad():
         # Temporarily enable gradient computation for conducting the optimization
         for _ in range(n_inner_iter):
-            pred = fnet(params, x_spt)
+            pred = torch.func.functional_call(net, dict(zip(param_names, params)), x_spt)
             loss = F.cross_entropy(pred, y_spt)  # compute loss
             # Compute regularization loss
             regularization_loss = 0
@@ -290,14 +313,15 @@ def train_imaml_inner_solver(params, meta_params, data, aux):
 
 def test_imaml_inner_solver(params, meta_params, data, aux):
     x_spt, y_spt = data
-    fnet, n_inner_iter, reg_param = aux
+    net, n_inner_iter, reg_param = aux
+    param_names = list(dict(net.named_parameters()))
     # Initial functional optimizer based on TorchOpt
     inner_opt = torchopt.sgd(lr=1e-1)
     inner_opt_state = inner_opt.init(params)
     with torch.enable_grad():
         # Temporarily enable gradient computation for conducting the optimization
         for _ in range(n_inner_iter):
-            pred = fnet(params, x_spt)
+            pred = torch.func.functional_call(net, dict(zip(param_names, params)), x_spt)
             loss = F.cross_entropy(pred, y_spt)  # compute loss
             # Compute regularization loss
             regularization_loss = 0

@@ -39,7 +39,6 @@ import functools
 import inspect
 from typing import Any, Callable, Dict, Sequence, Tuple
 
-import functorch
 import torch
 from torch.autograd import Function
 
@@ -120,7 +119,7 @@ def _root_vjp(
         def optimality_cond(solution: TupleOfTensors) -> TensorOrTensors:
             return optimality_fn(solution, *args)
 
-    _, optimality_cond_vjp_fn, *_ = functorch.vjp(optimality_cond, solution)
+    _, optimality_cond_vjp_fn, *_ = torch.func.vjp(optimality_cond, solution)
 
     # Compute the multiplication A^T u = (u^T A)^T.
     if output_is_tensor:
@@ -147,7 +146,7 @@ def _root_vjp(
         *args,
     )
 
-    _, optimality_vjp_fn, *_ = functorch.vjp(
+    _, optimality_vjp_fn, *_ = torch.func.vjp(
         masked_optimality_fn,
         *masked_optimality_fn.post_filled,
     )

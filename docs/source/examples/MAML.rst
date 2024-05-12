@@ -58,7 +58,7 @@ TorchOpt supports any user-defined PyTorch networks. Here is an example:
 .. code-block:: python
 
     import torch, numpy as np
-    from torch import nn
+    import torch.nn as nn
     import torch.optim as optim
 
     net = nn.Sequential(

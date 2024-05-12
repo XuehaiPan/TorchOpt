@@ -24,7 +24,6 @@ import inspect
 import itertools
 from typing import Any, Iterable
 
-import functorch
 import torch
 
 from torchopt.diff.implicit.decorator import custom_root
@@ -95,7 +94,7 @@ def make_optimality_from_objective(
         params_names, flat_params = tuple(zip(*named_params))
         meta_params_names, flat_meta_params = tuple(zip(*named_meta_params))
 
-        objective_grad_fn = functorch.grad(_stateless_objective_fn, argnums=0)
+        objective_grad_fn = torch.func.grad(_stateless_objective_fn, argnums=0)
         return objective_grad_fn(
             flat_params,
             flat_meta_params,

@@ -16,7 +16,6 @@
 import argparse
 from typing import NamedTuple
 
-import functorch
 import gym
 import numpy as np
 import torch

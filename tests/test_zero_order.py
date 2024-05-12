@@ -13,7 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-import functorch
 import pytest
 import torch
 import torch.nn as nn

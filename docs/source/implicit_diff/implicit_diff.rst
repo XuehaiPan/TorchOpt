@@ -226,7 +226,7 @@ Users can also select the corresponding solver in functional and OOP APIs.
 
     # For functional API
     @torchopt.diff.implicit.custom_root(
-        functorch.grad(objective_fn, argnums=0),  # optimality function
+        torch.func.grad(objective_fn, argnums=0),  # optimality function
         argnums=1,
         solve=torchopt.linear_solve.solve_normal_cg(maxiter=5, atol=0),
     )

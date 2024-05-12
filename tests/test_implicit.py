@@ -20,7 +20,6 @@ import re
 from collections import OrderedDict
 from types import FunctionType
 
-import functorch
 import numpy as np
 import pytest
 import torch
@@ -150,7 +149,7 @@ def test_imaml_solve_normal_cg(
         return F.cross_entropy(y_pred, y) + regularization_loss
 
     @torchopt.diff.implicit.custom_root(
-        functorch.grad(imaml_objective_torchopt, argnums=0),
+        torch.func.grad(imaml_objective_torchopt, argnums=0),
         argnums=1,
         has_aux=True,
         solve=torchopt.linear_solve.solve_normal_cg(),
@@ -279,7 +278,7 @@ def test_imaml_solve_inv(
         return F.cross_entropy(y_pred, y) + regularization_loss
 
     @torchopt.diff.implicit.custom_root(
-        functorch.grad(imaml_objective_torchopt, argnums=0),
+        torch.func.grad(imaml_objective_torchopt, argnums=0),
         argnums=1,
         solve=torchopt.linear_solve.solve_inv(ns=ns),
     )
@@ -510,7 +509,10 @@ def test_rr_solve_cg(
         regularization_loss = 0.5 * l2reg * torch.sum(torch.square(params))
         return 0.5 * torch.mean(torch.square(residuals)) + regularization_loss
 
-    @torchopt.diff.implicit.custom_root(functorch.grad(ridge_objective_torch, argnums=0), argnums=1)
+    @torchopt.diff.implicit.custom_root(
+        torch.func.grad(ridge_objective_torch, argnums=0),
+        argnums=1,
+    )
     def ridge_solver_torch_cg(params, l2reg, data):
         """Solve ridge regression by conjugate gradient."""
         X_tr, y_tr = data
@@ -616,7 +618,10 @@ def test_rr_solve_inv(
         regularization_loss = 0.5 * l2reg * torch.sum(torch.square(params))
         return 0.5 * torch.mean(torch.square(residuals)) + regularization_loss
 
-    @torchopt.diff.implicit.custom_root(functorch.grad(ridge_objective_torch, argnums=0), argnums=1)
+    @torchopt.diff.implicit.custom_root(
+        torch.func.grad(ridge_objective_torch, argnums=0),
+        argnums=1,
+    )
     def ridge_solver_torch_inv(params, l2reg, data):
         """Solve ridge regression by conjugate gradient."""
         X_tr, y_tr = data

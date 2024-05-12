@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from typing import Callable
 
-import functorch
 import pytest
 import torch
 import torch.nn.functional as F

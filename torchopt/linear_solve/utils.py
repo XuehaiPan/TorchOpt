@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-import functorch
+import torch
 
 from torchopt import pytree
 from torchopt.typing import TensorTree
@@ -46,7 +46,7 @@ def make_rmatvec(
     example_x: TensorTree,
 ) -> Callable[[TensorTree], TensorTree]:
     """Return a function that computes ``rmatvec(y) = A.T @ y`` from ``matvec(x) = A @ x``."""
-    _, vjp, *_ = functorch.vjp(matvec, example_x)
+    _, vjp, *_ = torch.func.vjp(matvec, example_x)
 
     return lambda y: vjp(y)[0]
 
@@ -58,7 +58,7 @@ def make_normal_matvec(
 
     def normal_matvec(y: TensorTree) -> TensorTree:
         """Compute ``A.T @ A @ y`` from ``matvec(x) = A @ x``."""
-        matvec_y, vjp, *_ = functorch.vjp(matvec, y)
+        matvec_y, vjp, *_ = torch.func.vjp(matvec, y)
         return vjp(matvec_y)[0]
 
     return normal_matvec
@@ -113,7 +113,7 @@ def materialize_matvec(
             return tree_ravel(matvec(tree_unravel(y)))
 
     nargs = len(x_flat)
-    jacobian_tree = functorch.jacfwd(matvec_ravel)(tree_ravel(x))
+    jacobian_tree = torch.func.jacfwd(matvec_ravel)(tree_ravel(x))
     jacobian_flat = pytree.tree_leaves(jacobian_tree)
     jacobian_diag = [jacobian_flat[i + i * nargs] for i in range(nargs)]
     return pytree.tree_unflatten(treespec, jacobian_diag), matvec_ravel, tree_ravel, tree_unravel

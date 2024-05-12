@@ -43,9 +43,9 @@ body:
         - Versions of any other relevant libraries
 
         ```python
-        import sys, torch, functorch, torchopt
+        import sys, torch, torchopt
         print(sys.version, sys.platform)
-        print(torchopt.__version__, torch.__version__, functorch.__version__)
+        print(torchopt.__version__, torch.__version__)
         ```
     validations:
       required: true
